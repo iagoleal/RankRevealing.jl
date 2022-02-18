@@ -9,6 +9,21 @@ using LinearAlgebra
 rows(A) = size(A)[1]
 cols(A) = size(A)[2]
 
+function permcompose(p, q)
+    n = length(p)
+    if n != length(q)
+        error("Tried to compose permutations over different dimensions.")
+    end
+    return [p[q[k]] for k in 1:n]
+end
+
+function permtranspose(p)
+  pt = similar(p)
+  for (i, v) in enumerate(p)
+    pt[v] = i
+  end
+  return pt
+end
 
 struct PLUQ{T, S <: AbstractMatrix{T}} <: Factorization{T}
   factors  :: S
@@ -25,18 +40,21 @@ function PLUQ(A::AbstractMatrix{T}, p, q, r) where {T}
 end
 
 function getproperty(D::PLUQ{T, <:AbstractMatrix}, key::Symbol) where T
-  m, n = size(D)
-  if key == :L then
+  if key == :L
+    r = getfield(D, :rank)
     L = tril!(getfield(D, :factors)[1:r, 1:r])
     for i in 1:r
       L[i, i] = one(T)
     end
     return L
-  elseif key == :U then
+  elseif key == :U
+    r = getfield(D, :rank)
     return triu!(getfield(D, :factors)[1:r, 1:r])
-  elseif key == :V then
+  elseif key == :V
+    r = getfield(D, :rank)
     return getfield(D, :factors)[1:r, (r+1):end]
-  elseif key == :M then
+  elseif key == :M
+    r = getfield(D, :rank)
     return getfield(D, :factors)[(r+1):end, 1:r]
   else
     getfield(D, key)
@@ -44,6 +62,17 @@ function getproperty(D::PLUQ{T, <:AbstractMatrix}, key::Symbol) where T
 end
 
 mm!(C, A, B) = LinearAlgebra.mul!(C, A, B, -1, 1)
+
+# Permute the columns of A inplace
+# TODO: Rewrite this without copying
+function permC!(A, p::AbstractVector)
+  A .= A[:, p]
+end
+
+# Permute the rows of A inplace
+function permR!(A, p::AbstractVector)
+  A .= A[p, :]
+end
 
 # Transposition permutation for indices i and j
 function transposition(n, i, j)
@@ -90,7 +119,7 @@ function pluq!(A)
   if m == 1
     if iszero(A)
       P = [1]
-      Q = I(n)    # n x n identity matrix
+      Q = collect(1:n)    # n x n identity matrix
       r = 0
     else
       i = findfirst(!(iszero), A).I[2] # column index of the first non-zero element of A
@@ -103,7 +132,7 @@ function pluq!(A)
   end
   if n == 1
     if iszero(A)
-      P = I(m)
+      P = collect(1:m)
       Q = [1]
       r = 0
     else
@@ -147,7 +176,7 @@ function pluq!(A)
   K = rdiv!(H3, U2)
   N = ldiv!(L3, H2)
   O = mm!(N, J, V2)
-  R = (mm!(H4, K, V2); mm!(H4, M3, O)
+  R = (mm!(H4, K, V2); mm!(H4, M3, O))
   P4, Q4, r4, R = pluq!(R) # Decompose lower-left crner
   L4, U4, V4, M4 = decomp(R, r4)
   # TODO: is this inplace?
@@ -156,6 +185,31 @@ function pluq!(A)
   E21, E22 = vsplit(E2, rows(V4))
   M31, M32 = vsplit(M3, rows(V4))
   K1,  K2  = vsplit(K,  rows(V4))
+  right = view(A, 1:(rows(A) - rows(R)), (cols(A)-cols(R) + 1):cols(A))
+  permC!(right, Q4)
+  D21, D22 = hsplit(D2, cols(M4))
+  V21, V22 = hsplit(V2, cols(M4))
+  O1,  O2  = hsplit(O,  cols(M4))
+  # TODO: assign these variables
+  S = vcat(range(1, length=(r1 + r2)),
+           range(r1 + r2 + r3 + r4 + 1, length=(k-r1-r2)),
+           range(r1 + r2 + 1, length=(r3+r4)),
+           range(r3 + r4 + k+ 1, length=(m-k-r3-r4)))
+  T = vcat(range(1,      length=r1),
+           range(k+1,    length=r2),
+           range(r1+1,   length=r3),
+           range(k+r2+1, length=r4),
+           range(r1+r3+1,   length=(k-r1-r3),
+           range(k+r2+r4+1, length=(n-k-r2-r4))))
+  P_ = vcat(permcompose(P1, vcat(1:r1, map(x -> x + r1, P2))),
+            permcompose(P3, vcat(1:r3, map(x -> x + r3, P4))))
+  Q_ = vcat(permcompose(vcat(1:r1, map(x -> x + r1, Q2)), Q1),
+            permcompose(vcat(1:r3, map(x -> x + r3, Q4)), Q3))
+  P = permcompose(P_, S)
+  Q = permcompose(T, Q_)
+  permR!(A, S)
+  permC!(A, T)
+  return P, Q, r1 + r2 + r3 + r4, A
 end
 
 # Non-destructive PLUQ decomposition
