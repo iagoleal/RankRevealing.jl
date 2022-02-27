@@ -1,7 +1,8 @@
-module GLU
+module RankRevealing
 export pluq, grr
 
 using LinearAlgebra
+using Debugger
 
 # https://github.com/JuliaArrays/BlockArrays.jl
 # https://arxiv.org/pdf/1301.4438.pdf
@@ -66,12 +67,13 @@ mm!(C, A, B) = LinearAlgebra.mul!(C, A, B, -1, 1)
 # Permute the columns of A inplace
 # TODO: Rewrite this without copying
 function permC!(A, p::AbstractVector)
-  A .= A[:, p]
+  B = A[:, permtranspose(p)]
+  A .= B
 end
 
 # Permute the rows of A inplace
 function permR!(A, p::AbstractVector)
-  A .= A[p, :]
+  A .= A[permtranspose(p), :]
 end
 
 # Transposition permutation for indices i and j
@@ -108,7 +110,7 @@ function decomp(A, r)
   m, n = size(A)
   L = UnitLowerTriangular(view(A, 1:r, 1:r))
   U = UpperTriangular(view(A, 1:r, 1:r))
-  V = view(A, 1:r, 1:n)
+  V = view(A, 1:r, (r+1):n)
   M = view(A, (r+1):m, 1:r)
   return (L = L, U = U, V = V, M = M)
 end
@@ -128,6 +130,7 @@ function pluq!(A)
       r = 1
       A[1, i], A[1, 1] = A[1, 1], A[1, i]
     end
+    @bp
     return P, Q, r, A
   end
   if n == 1
@@ -136,7 +139,6 @@ function pluq!(A)
       Q = [1]
       r = 0
     else
-      # Note transpose here?
       i = findfirst(!(iszero), A).I[1] # row index of the first non-zero element of A
       P = [1]
       Q = transposition(m, 1, i)
@@ -147,14 +149,16 @@ function pluq!(A)
         A[j, 1] = A[j, 1] / pivot
       end
     end
+    @bp
     return P, Q, r, A
   end
   # Now the recursion step
   A1, A2, A3, A4 = msplit(A)
   P1, Q1, r1, A1 = pluq!(A1) # Decompose upper-left quadrant
   L1, U1, V1, M1 = decomp(A1, r1)
-  B1, B2 = vsplit(permR!(A2, P1), rows(V1))
-  C1, C2 = hsplit(permC!(A3, Q1), cols(M1))
+  @bp
+  B1, B2 = vsplit(permR!(A2, P1), rows(A2) - rows(M1))
+  C1, C2 = hsplit(permC!(A3, Q1), rows(A3) - cols(V1))
   D = ldiv!(L1, B1)
   E = rdiv!(C1, U1)
   F = mm!(B2, M1, D)
@@ -167,10 +171,11 @@ function pluq!(A)
   permR!(H, P3)
   permC!(H, Q2)
   H1, H2, H3, H4 = msplit(H)
-  E1,  E2  = vsplit(permR!(E, P3), rows(H1))
-  M11, M12 = vsplit(permR!(M1, P2), rows(V2))
-  D1,  D2  = hsplit(permR!(D, Q2), cols(M2))
-  V11, V12 = hsplit(permR!(V1, Q3), cols(M3))
+  E1,  E2  = vsplit(permR!(E, P3),  rows(E)  - rows(H3))
+  M11, M12 = vsplit(permR!(M1, P2), rows(M1) - rows(M2))
+  D1,  D2  = hsplit(permR!(D, Q2),  cols(D)  - cols(V2))
+  @bp
+  V11, V12 = hsplit(permR!(V1, Q3), cols(V1) - cols(V3))
   I = rdiv!(H1, U2)
   J = ldiv!(L3, I)
   K = rdiv!(H3, U2)
@@ -225,21 +230,30 @@ pluq(A) = pluq!(copy(A))
 # Generalized Rank Revealing decomposition
 ###########################################
 
+struct GeneralizedRankRevealing{T, S <: AbstractMatrix{T}} <: Factorization{T}
+  X        :: S
+  Y        :: S
+  H        :: S
+  r1       :: Int64
+  r2       :: Int64
+  r3       :: Int64
+end
+
 function epimono(A)
-  P, L, M, V, U, Q = pluq(X)
+  P, L, M, V, U, Q = pluq(A)
   return P*[L ; M], [U V] * Q
 end
 
 # Right rank revealing
-function invmono(X)
-  P, L, M, V, U, Q = pluq(X)
+function invmono(A)
+  P, L, M, V, U, Q = pluq(A)
   return P * [L ; M],
          [I 0*I ; U V] * Q
 end
 
 # Left rank revealing
-function epiinv(X)
-  P, L, M, V, U, Q = pluq(X)
+function epiinv(A)
+  P, L, M, V, U, Q = pluq(A)
   return P * [L 0*I ; M I],
          [U V] * Q
 end

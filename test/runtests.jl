@@ -11,7 +11,7 @@ filepath(x) = joinpath(dirname(@__FILE__), x)
   @info "Testing Rank-sensitive LU"
   include(filepath("lu.jl"))
 
-  @info "Testing Generalized Rank Revealing"
-  include(filepath("grr.jl"))
+  # @info "Testing Generalized Rank Revealing"
+  # include(filepath("grr.jl"))
 end
 
