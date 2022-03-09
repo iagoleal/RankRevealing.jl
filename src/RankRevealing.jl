@@ -1,8 +1,7 @@
 module RankRevealing
-export pluq, grr
+export pluq, grr, validation
 
 using LinearAlgebra
-using Debugger
 
 # https://github.com/JuliaArrays/BlockArrays.jl
 # https://arxiv.org/pdf/1301.4438.pdf
@@ -62,7 +61,12 @@ function getproperty(D::PLUQ{T, <:AbstractMatrix}, key::Symbol) where T
   end
 end
 
-mm!(C, A, B) = LinearAlgebra.mul!(C, A, B, -1, 1)
+# C <- C - AB
+function mm!(C, A, B)
+  C .= C - A*B
+  return C
+  # LinearAlgebra.mul!(C, A, B, -1, 1)
+end
 
 # Permute the columns of A inplace
 # TODO: Rewrite this without copying
@@ -84,9 +88,8 @@ function transposition(n, i, j)
 end
 
 # In-place matrix splitting into 4 blocks
-function msplit(A)
+function msplit(A, mh = fld(rows(A),2), nh = fld(cols(A), 2))
   m, n = size(A)
-  mh, nh = fld(m, 2), fld(n, 2)
   return view(A, 1:mh,     1:nh),
          view(A, 1:mh,     (nh+1):n),
          view(A, (mh+1):m, 1:nh),
@@ -115,6 +118,14 @@ function decomp(A, r)
   return (L = L, U = U, V = V, M = M)
 end
 
+function validation(P, Q, r, A)
+  L, U, V, M = decomp(A, r)
+  X = vcat(L, M) * hcat(U, V)
+  permR!(X, permtranspose(P))
+  permC!(X, permtranspose(Q))
+  return X
+end
+
 
 function pluq!(A)
   m, n = size(A)
@@ -130,7 +141,6 @@ function pluq!(A)
       r = 1
       A[1, i], A[1, 1] = A[1, 1], A[1, i]
     end
-    @bp
     return P, Q, r, A
   end
   if n == 1
@@ -140,8 +150,9 @@ function pluq!(A)
       r = 0
     else
       i = findfirst(!(iszero), A).I[1] # row index of the first non-zero element of A
-      P = [1]
-      Q = transposition(m, 1, i)
+      # NOTE: Error in article
+      P = transposition(m, 1, i)
+      Q = [1]
       r = 1
       A[i, 1], A[1, 1] = A[1, 1], A[i, 1]
       local pivot = A[1,1]
@@ -149,16 +160,14 @@ function pluq!(A)
         A[j, 1] = A[j, 1] / pivot
       end
     end
-    @bp
     return P, Q, r, A
   end
   # Now the recursion step
   A1, A2, A3, A4 = msplit(A)
   P1, Q1, r1, A1 = pluq!(A1) # Decompose upper-left quadrant
   L1, U1, V1, M1 = decomp(A1, r1)
-  @bp
-  B1, B2 = vsplit(permR!(A2, P1), rows(A2) - rows(M1))
-  C1, C2 = hsplit(permC!(A3, Q1), rows(A3) - cols(V1))
+  B1, B2 = vsplit(permR!(A2, P1), r1)
+  C1, C2 = hsplit(permC!(A3, Q1), r1)
   D = ldiv!(L1, B1)
   E = rdiv!(C1, U1)
   F = mm!(B2, M1, D)
@@ -170,42 +179,47 @@ function pluq!(A)
   L3, U3, V3, M3 = decomp(G, r3)
   permR!(H, P3)
   permC!(H, Q2)
-  H1, H2, H3, H4 = msplit(H)
-  E1,  E2  = vsplit(permR!(E, P3),  rows(E)  - rows(H3))
-  M11, M12 = vsplit(permR!(M1, P2), rows(M1) - rows(M2))
-  D1,  D2  = hsplit(permR!(D, Q2),  cols(D)  - cols(V2))
-  @bp
-  V11, V12 = hsplit(permR!(V1, Q3), cols(V1) - cols(V3))
+  # Split based on the previous recursions
+  H1, H2, H3, H4 = msplit(H, r3, r2)
+  E1,  E2  = vsplit(permR!(E, P3),  r3)
+  M11, M12 = vsplit(permR!(M1, P2), r2)
+  # Erro do artigo: permC e não permR
+  D1,  D2  = hsplit(permC!(D, Q2),  r2)
+  V11, V12 = hsplit(permC!(V1, Q3), r3)
   I = rdiv!(H1, U2)
   J = ldiv!(L3, I)
   K = rdiv!(H3, U2)
   N = ldiv!(L3, H2)
   O = mm!(N, J, V2)
   R = (mm!(H4, K, V2); mm!(H4, M3, O))
-  P4, Q4, r4, R = pluq!(R) # Decompose lower-left crner
+  P4, Q4, r4, R = pluq!(R) # Decompose lower-left corner
   L4, U4, V4, M4 = decomp(R, r4)
-  # TODO: is this inplace?
-  bot = view(A, (rows(A)-rows(E2)+1):rows(A), 1:(cols(A2) + cols(K)))
-  permR!(bot, P4)
-  E21, E22 = vsplit(E2, rows(V4))
-  M31, M32 = vsplit(M3, rows(V4))
-  K1,  K2  = vsplit(K,  rows(V4))
-  right = view(A, 1:(rows(A) - rows(R)), (cols(A)-cols(R) + 1):cols(A))
-  permC!(right, Q4)
-  D21, D22 = hsplit(D2, cols(M4))
-  V21, V22 = hsplit(V2, cols(M4))
-  O1,  O2  = hsplit(O,  cols(M4))
-  # TODO: assign these variables
-  S = vcat(range(1, length=(r1 + r2)),
+  permR!(E2, P4)
+  permR!(M3, P4)
+  permR!(K,  P4)
+  E21, E22 = vsplit(E2, r4)
+  M31, M32 = vsplit(M3, r4)
+  K1,  K2  = vsplit(K,  r4)
+  permC!(D2, Q4)
+  permC!(V2, Q4)
+  permC!(O,  Q4)
+  D21, D22 = hsplit(D2, r4)
+  V21, V22 = hsplit(V2, r4)
+  O1,  O2  = hsplit(O,  r4)
+  # Permutations
+  k = rows(A1)
+  S = vcat(range(1,                     length=(r1 + r2)),
            range(r1 + r2 + r3 + r4 + 1, length=(k-r1-r2)),
-           range(r1 + r2 + 1, length=(r3+r4)),
-           range(r3 + r4 + k+ 1, length=(m-k-r3-r4)))
-  T = vcat(range(1,      length=r1),
-           range(k+1,    length=r2),
-           range(r1+1,   length=r3),
-           range(k+r2+1, length=r4),
-           range(r1+r3+1,   length=(k-r1-r3),
-           range(k+r2+r4+1, length=(n-k-r2-r4))))
+           range(r1 + r2 + 1,           length=(r3+r4)),
+           range(r3 + r4 + k + 1,       length=(m-k-r3-r4)))
+  kT = cols(A1)
+  T = vcat(range(1,          length=r1),
+           range(kT+1,       length=r2),
+           range(r1+1,       length=r3),
+           range(kT+r2+1,    length=r4),
+           range(r1+r3+1,    length=(kT-r1-r3)),
+           range(kT+r2+r4+1, length=(n-kT-r2-r4)))
+  # TODO: review here
   P_ = vcat(permcompose(P1, vcat(1:r1, map(x -> x + r1, P2))),
             permcompose(P3, vcat(1:r3, map(x -> x + r3, P4))))
   Q_ = vcat(permcompose(vcat(1:r1, map(x -> x + r1, Q2)), Q1),
