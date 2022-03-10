@@ -129,30 +129,32 @@ end
 
 function pluq!(A)
   m, n = size(A)
+  # Degenerate zero
+  if m == 0 && n == 0
+    return [], [], 0, A
+  end
   if m == 1
+    P = [1]
     if iszero(A)
-      P = [1]
       Q = collect(1:n)    # n x n identity matrix
       r = 0
     else
-      i = findfirst(!(iszero), A).I[2] # column index of the first non-zero element of A
-      P = [1]
+      i = findfirst(!(iszero), A)[2]        # column index of the first non-zero element of A
       Q = transposition(n, 1, i)
       r = 1
-      A[1, i], A[1, 1] = A[1, 1], A[1, i]
+      A[1, i], A[1, 1] = A[1, 1], A[1, i]   # Pivoting
     end
     return P, Q, r, A
   end
   if n == 1
+    Q = [1]
     if iszero(A)
       P = collect(1:m)
-      Q = [1]
       r = 0
     else
-      i = findfirst(!(iszero), A).I[1] # row index of the first non-zero element of A
+      i = findfirst(!(iszero), A)[1] # row index of the first non-zero element of A
       # NOTE: Error in article
       P = transposition(m, 1, i)
-      Q = [1]
       r = 1
       A[i, 1], A[1, 1] = A[1, 1], A[i, 1]
       local pivot = A[1,1]
@@ -219,11 +221,12 @@ function pluq!(A)
            range(kT+r2+1,    length=r4),
            range(r1+r3+1,    length=(kT-r1-r3)),
            range(kT+r2+r4+1, length=(n-kT-r2-r4)))
-  # TODO: review here
   P_ = vcat(permcompose(P1, vcat(1:r1, map(x -> x + r1, P2))),
-            permcompose(P3, vcat(1:r3, map(x -> x + r3, P4))))
-  Q_ = vcat(permcompose(vcat(1:r1, map(x -> x + r1, Q2)), Q1),
-            permcompose(vcat(1:r3, map(x -> x + r3, Q4)), Q3))
+            map(x -> x + length(P1),
+                permcompose(P3, vcat(1:r3, map(x -> x + r3, P4)))))
+  Q_ = vcat(permcompose(vcat(1:r1, map(x -> x + r1, Q3)), Q1),
+            map(x -> x + length(Q1),
+                permcompose(vcat(1:r2, map(x -> x + r2, Q4)), Q2)))
   P = permcompose(P_, S)
   Q = permcompose(T, Q_)
   permR!(A, S)
