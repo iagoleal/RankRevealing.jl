@@ -1,13 +1,17 @@
 using RankRevealing
 using Test
 using Random
+using LinearAlgebra
 
-recomp = RankRevealing.validation
+# Takes a PLUQ object into the original matrix
+recomp(x) = ([x.L ; x.M] * [x.U x.V])[x.p, x.q]
 
 # Check that the decomposition
 # can be multiplied into the right matrix
-correctness(A::AbstractArray{Float64}) = isapprox(recomp(pluq(A)...), A, atol = 1e-10)
-correctness(A) = recomp(pluq(A)...) == A
+function correctness(A::AbstractArray{T}) where {K <: AbstractFloat, S <: Complex{K}, T <: Union{S, K}}
+  return isapprox(recomp(pluq(A)), A, atol = 1e-10)
+end
+correctness(A) = recomp(pluq(A)) == A
 
 @testset "Base cases for PLUQ" begin
   # Degenerate cases (dimension zero)
@@ -37,13 +41,36 @@ end
   @test correctness(A)
 end
 
-@testset "Float matrices" for m in 0:9, n in 0:9
-  @test correctness(rand(m,n))   # Uniform components
-  @test correctness(randn(m,n))  # Gaussian matrix
+@testset "Rectangular matrices: ($m by $m)" for m in 0:9, n in 0:9
+  @testset "Floating point components" begin
+    @test correctness(rand(m,n))   # Uniform components
+    @test correctness(randn(m,n))  # Gaussian matrix
+  end
+
+  @testset "Exact Rational components" begin
+    # We want to use BigInt and Rational to ensure exact arithmetic
+    A = big.(rand(Int64, m, n) .// rand(Int64, m, n))
+    @test correctness(A)
+  end
+
+  @testset "Complex components" begin
+    @test correctness(rand(Complex{Float64}, m, n))
+    A = big.(rand(Int64, m, n) .// rand(Int64, m, n))
+    B = big.(rand(Int64, m, n) .// rand(Int64, m, n))
+    @test correctness(A + im*B)
+    # Unit complex matrices
+    A = rand(Complex{Float64}, m, n)
+    C = A ./ norm.(A)
+    @test correctness(C)
+  end
 end
 
-@testset "Rational matrices" for m in 0:9, n in 0:9
-  # We want to use BigInt and Rational to ensure exact arithmetic
-  A = big.(rand(Int64, m, n) .// rand(Int64, m, n))
-  @test correctness(A)
+@testset "Destructuring" begin
+  A = rand(5, 7)
+  PLUQ = pluq(A)
+  p, L, U, V, M, q = PLUQ
+  # Using permutation vectors
+  @test ([L ; M] * [U V])[p, q] ≈ A atol=1e-10
+  # Using permutation matrices
+  @test (PLUQ.P * [L ; M] * [U V] * PLUQ.Q) ≈ A atol=1e-10
 end
