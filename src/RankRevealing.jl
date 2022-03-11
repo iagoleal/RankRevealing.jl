@@ -1,13 +1,15 @@
 module RankRevealing
-export pluq, grr, validation
+export pluq, grr, PLUQ
 
 using LinearAlgebra
 
-# https://github.com/JuliaArrays/BlockArrays.jl
-# https://arxiv.org/pdf/1301.4438.pdf
-
 rows(A) = size(A)[1]
 cols(A) = size(A)[2]
+
+
+########################
+# Permutations
+########################
 
 function permcompose(p, q)
     n = length(p)
@@ -25,21 +27,69 @@ function permtranspose(p)
   return pt
 end
 
+# Transposition permutation for indices i and j
+function transposition(n, i, j)
+  perm = collect(1:n)
+  perm[i], perm[j] = perm[j], perm[i]
+  return perm
+end
+
+function perm2matrix(T, p)
+  A = zeros(T, length(p), length(p))
+  for (i, v) in enumerate(p)
+    A[i, v] = 1
+  end
+  return A
+end
+
+########################
+# PLUQ type
+########################
+
+# Strongly based on LinearAlgebra.LU
+"""
+    PLUQ <: Factorizarion
+
+Matrix factorization type for the full `LU` factorization
+of any rectangular matrix `A` over an arbitrary numeric field.
+This is the return type of [`pluq`](@ref).
+
+The factorization satisfies
+
+    P * [L ; M] * [U V] * Q == A
+
+
+| Component | Description                              |
+|:----------|:-----------------------------------------|
+| `F.L`     | Full-rank unit lower triangular part     |
+| `F.U`     | Full-rank upper triangular part          |
+| `F.M`     | Remainder of the row dimension           |
+| `F.V`     | Remainder of the column dimension        |
+| `F.P`     | row-wise permutation `Matrix`            |
+| `F.Q`     | column-wise permutation `Matrix`         |
+| `F.p`     | row-wise permutation `Vector`            |
+| `F.q`     | column-wise permutation `Matrix`         |
+
+Iteration and destructuring produce the components in the order `p`, `L`, `U`, `V`, `M`, q`.
+
+Both `L` and `U` are square full-rank matrices
+with the same rank as `A`.
+"""
 struct PLUQ{T, S <: AbstractMatrix{T}} <: Factorization{T}
-  factors  :: S
-  perm_pre :: Vector{Int64}
-  perm_pos :: Vector{Int64}
+  p :: Vector{Int64}
+  q :: Vector{Int64}
   rank     :: Int64
-  function PLUQ{T,S}(A, perm_pre, perm_pos, rank) where {T,S<:AbstractMatrix{T}}
-      new{T,S}(A, perm_pre, perm_pos, rank)
+  factors  :: S
+  function PLUQ{T,S}(p, q, rank, A) where {T,S<:AbstractMatrix{T}}
+      new{T,S}(p, q, rank, A)
   end
 end
 
-function PLUQ(A::AbstractMatrix{T}, p, q, r) where {T}
-  LU{T,typeof(A)}(A, p, q, r)
+function PLUQ(p, q, r, A::AbstractMatrix{T}) where {T}
+  PLUQ{T,typeof(A)}(p, q, r, A)
 end
 
-function getproperty(D::PLUQ{T, <:AbstractMatrix}, key::Symbol) where T
+function Base.getproperty(D::PLUQ{T}, key::Symbol) where T
   if key == :L
     r = getfield(D, :rank)
     L = tril!(getfield(D, :factors)[1:r, 1:r])
@@ -56,10 +106,25 @@ function getproperty(D::PLUQ{T, <:AbstractMatrix}, key::Symbol) where T
   elseif key == :M
     r = getfield(D, :rank)
     return getfield(D, :factors)[(r+1):end, 1:r]
+  elseif key == :P
+    return perm2matrix(T, getfield(D, :p))
+  elseif key == :Q
+    return perm2matrix(T, getfield(D, :q))
   else
     getfield(D, key)
   end
 end
+
+Base.propertynames(::PLUQ) = (:P, :L, :U, :V, :M, :Q, :p, :q)
+
+# Destructure as p, L, U, V, M, q
+Base.iterate(S::PLUQ)            = (S.p, Val(:L))
+Base.iterate(S::PLUQ, ::Val{:L}) = (S.L, Val(:U))
+Base.iterate(S::PLUQ, ::Val{:U}) = (S.U, Val(:V))
+Base.iterate(S::PLUQ, ::Val{:V}) = (S.V, Val(:M))
+Base.iterate(S::PLUQ, ::Val{:M}) = (S.M, Val(:q))
+Base.iterate(S::PLUQ, ::Val{:q}) = (S.q, Val(:done))
+Base.iterate(S::PLUQ, ::Val{:done}) = nothing
 
 # C <- C - AB
 function mm!(C, A, B)
@@ -78,13 +143,6 @@ end
 # Permute the rows of A inplace
 function permR!(A, p::AbstractVector)
   A .= A[permtranspose(p), :]
-end
-
-# Transposition permutation for indices i and j
-function transposition(n, i, j)
-  perm = collect(1:n)
-  perm[i], perm[j] = perm[j], perm[i]
-  return perm
 end
 
 # In-place matrix splitting into 4 blocks
@@ -118,15 +176,11 @@ function decomp(A, r)
   return (L = L, U = U, V = V, M = M)
 end
 
-function validation(P, Q, r, A)
-  L, U, V, M = decomp(A, r)
-  X = vcat(L, M) * hcat(U, V)
-  permR!(X, permtranspose(P))
-  permC!(X, permtranspose(Q))
-  return X
-end
 
-
+# In-place PLUQ factorization.
+# This is supposed to be used only as an internal method.
+# To accelerate the recursion, this Returns the "crude" output,
+# without creating the intermediary PLUQ structure.
 function pluq!(A)
   m, n = size(A)
   # Degenerate zero
@@ -236,12 +290,32 @@ end
 
 # Non-destructive PLUQ decomposition
 """
-    pluq(A) -> P [L ; M] [U V] Q
+    pluq(A) -> PLUQ
 
-Perform a rank-sensitive LU factorizaton of `A`.
+Perform a rank-sensitive LU factorization of `A`.
+The factorization of an `n` by `m` matrix
+is computed in `O(n m r^(ω-2))` steps,
+where `r = rank(A)` and `ω` is the matrix multiplication complexity exponent.
+
+This is an exact function who should work with
+any type implementing the basic arithmetic operations
+`+`, `-`, `*`, `/`, `one`, `zero`.
+
+The resulting factorization `F` satisfies
+
+    F.P * [F.L ; F.M] * [F.U F.V] * F.Q == A
+
+See [the link](https://arxiv.org/pdf/1301.4438.pdf)
+for the original description of the algorithm.
 """
-pluq(A) = pluq!(copy(A))
+function pluq end
 
+function pluq(A::AbstractMatrix)
+  P, Q, r, A = pluq!(copy(A))
+  return PLUQ(P, Q, r, A)
+end
+
+pluq(A::PLUQ) = A
 
 ###########################################
 # Generalized Rank Revealing decomposition
@@ -257,22 +331,22 @@ struct GeneralizedRankRevealing{T, S <: AbstractMatrix{T}} <: Factorization{T}
 end
 
 function epimono(A)
-  P, L, M, V, U, Q = pluq(A)
-  return P*[L ; M], [U V] * Q
+  p, L, U, V, M, q = pluq(A)
+  return ([L ; M])[p, :], ([U V])[:, q]
 end
 
 # Right rank revealing
 function invmono(A)
-  P, L, M, V, U, Q = pluq(A)
-  return P * [L ; M],
-         [I 0*I ; U V] * Q
+  p, L, U, V, M, q = pluq(A)
+  d = rows(A) - rows(L)
+  return ([L ; M])[p, :], [I(d) 0*I ; U V][:, q]
 end
 
 # Left rank revealing
 function epiinv(A)
-  P, L, M, V, U, Q = pluq(A)
-  return P * [L 0*I ; M I],
-         [U V] * Q
+  p, L, U, V, M, q = pluq(A)
+  d = cols(A) - cols(L)
+  return ([L 0*I ; M I(d)])[p, :], ([U V])[:, q]
 end
 
 
