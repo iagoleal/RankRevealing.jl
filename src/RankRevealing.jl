@@ -1,5 +1,5 @@
 module RankRevealing
-export pluq, grr, PLUQ
+export pluq, grr, PLUQ, simple_rr, right_rr, left_rr
 
 using LinearAlgebra
 
@@ -12,11 +12,11 @@ cols(A) = size(A)[2]
 ########################
 
 function permcompose(p, q)
-    n = length(p)
-    if n != length(q)
-        error("Tried to compose permutations over different dimensions.")
-    end
-    return [p[q[k]] for k in 1:n]
+  n = length(p)
+  if n != length(q)
+    error("Tried to compose permutations over different dimensions.")
+  end
+  return [p[q[k]] for k in 1:n]
 end
 
 function permtranspose(p)
@@ -330,23 +330,55 @@ struct GeneralizedRankRevealing{T, S <: AbstractMatrix{T}} <: Factorization{T}
   r3       :: Int64
 end
 
-function epimono(A)
-  p, L, U, V, M, q = pluq(A)
-  return ([L ; M])[p, :], ([U V])[:, q]
+# Swaps U and V on PLUQ
+#=
+[U V] * Q == [V U] * (J * Q)
+
+J = [ 0 I; I 0]
+
+du dv
+[1]
+[2, 1]
+[
+
+(r+1: n)  <> (1:r)
+=#
+function pluq2(A)
+  F = pluq(A)
+  n = cols(A)
+  r = F.rank
+  j = vcat(((n-r+1) : n),  (1:n-r))
+  newq = permcompose(j, F.q)
+  return PLUQ(F.p, newq, F.rank, F.factors)
 end
 
+function simple_rr(A)
+  p, L, U, V, M, q = pluq2(A)
+  # Permutation to swap U and V
+  return ([L ; M])[p, :], ([V U])[:, q]
+end
+
+
 # Right rank revealing
-function invmono(A)
-  p, L, U, V, M, q = pluq(A)
-  d = rows(A) - rows(L)
-  return ([L ; M])[p, :], [I(d) 0*I ; U V][:, q]
+function right_rr(A::AbstractMatrix{T}) where T
+  p, L, U, V, M, q = pluq2(A)
+  d = cols(V)
+  Z = zeros(T, cols(V), cols(U))
+  X = ([L ; M])[p, :]
+  H = ([I(d) Z; V U])[:, q]
+  return X, H
 end
 
 # Left rank revealing
-function epiinv(A)
-  p, L, U, V, M, q = pluq(A)
-  d = cols(A) - cols(L)
-  return ([L 0*I ; M I(d)])[p, :], ([U V])[:, q]
+function left_rr(A::AbstractMatrix{T}) where T
+  p, L, U, V, M, q = pluq2(A)
+  r = rows(L)
+  m = rows(A)
+  Z = zeros(T, r, m - r)
+  d = m - r
+  X = ([L Z; M I(d)])[p, :]
+  H = ([V U])[:, q]
+  return X, H
 end
 
 
@@ -363,21 +395,24 @@ There are matrices `X`, `Y` and `H` such that
 """
 function grr(A, B)
   m_A      = rows(A)
-  M, H1    = epimono([A ; B])
+  M, H1    = simple_rr([A ; B])
   A1, B1   = vsplit(M, m_A)
-  X2, A2   = epimono(A1)
-  Y2, H2   = invmono(B1)
+  X2, A2   = simple_rr(A1)
+  Y2, H2   = right_rr(B1)
   A3       = A2 / H2
-  A31, A32 = hsplit(A3, cols(H2))
-  X4, H4   = epiinv(A31)
+  A31, A32 = hsplit(A3, cols(A3) - cols(Y2))
+  X4, H4   = left_rr(A31)
   A4       = X4 \ A32
   A41, A42 = vsplit(A4, rows(H4))
-  X5, H5   = invmono(A42)
+  X5, H5   = right_rr(A42)
   # Outputs
-  local Zero = 0*I
-  X = (local _X = X2*X4; [_X Zero ; Zero _X * X5])
-  Y = Y2 / H5
-  H = [H4 A41 ; Zero H5] * H2 * H1
+  dx = cols(X4)-rows(X5)
+  Z1 = zeros(Int64, dx, cols(X5))
+  Z2 = zeros(Int64, rows(X5), dx)
+  X = X2 * X4 * [I(dx) Z1 ; Z2 X5]
+  Y = Y2 * inv(Matrix(H5))
+  Z3 = zeros(Int64, rows(H5), cols(H4))
+  H = [H4 A41 ; Z3 H5] * H2 * H1
   # Ranks
   rA = cols(X)
   rB = cols(Y)
