@@ -1,5 +1,5 @@
 module RankRevealing
-export pluq, grr, PLUQ, simple_rr, right_rr, left_rr
+export pluq, PLUQ, grr, GeneralizedRankRevealing, simple_rr, right_rr, left_rr
 
 using LinearAlgebra
 
@@ -330,6 +330,19 @@ struct GeneralizedRankRevealing{T, S <: AbstractMatrix{T}} <: Factorization{T}
   r3       :: Int64
 end
 
+function GeneralizedRankRevealing(X :: S, Y :: S, H :: S, r1, r2, r3) where {T, S <: AbstractMatrix{T}}
+  GeneralizedRankRevealing{T, S}(X, Y, H, r1, r2, r3)
+end
+
+# Destructure as p, L, U, V, M, q
+Base.iterate(S::GeneralizedRankRevealing)             = (S.X, Val(:Y))
+Base.iterate(S::GeneralizedRankRevealing, ::Val{:Y})  = (S.Y, Val(:H))
+Base.iterate(S::GeneralizedRankRevealing, ::Val{:H})  = (S.H, Val(:r1))
+Base.iterate(S::GeneralizedRankRevealing, ::Val{:r1}) = (S.r1, Val(:r2))
+Base.iterate(S::GeneralizedRankRevealing, ::Val{:r2}) = (S.r2, Val(:r3))
+Base.iterate(S::GeneralizedRankRevealing, ::Val{:r3}) = (S.r3, Val(:done))
+Base.iterate(S::GeneralizedRankRevealing, ::Val{:done}) = nothing
+
 # Swaps U and V on PLUQ
 #=
 [U V] * Q == [V U] * (J * Q)
@@ -406,18 +419,18 @@ function grr(A, B)
   A41, A42 = vsplit(A4, rows(H4))
   X5, H5   = right_rr(A42)
   # Outputs
-  dx = cols(X4)-rows(X5)
+  dx = cols(X4) - rows(X5)
   Z1 = zeros(Int64, dx, cols(X5))
   Z2 = zeros(Int64, rows(X5), dx)
   X = X2 * X4 * [I(dx) Z1 ; Z2 X5]
-  Y = Y2 * inv(Matrix(H5))
+  Y = Y2 / H5
   Z3 = zeros(Int64, rows(H5), cols(H4))
   H = [H4 A41 ; Z3 H5] * H2 * H1
   # Ranks
   rA = cols(X)
   rB = cols(Y)
   r_cap = rA + rB - cols(H)
-  return X, Y, H, rA - r_cap, rB - r_cap, r_cap
+  return GeneralizedRankRevealing(X, Y, H, rA - r_cap, rB - r_cap, r_cap)
 end
 
 end # module

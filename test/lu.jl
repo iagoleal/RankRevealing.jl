@@ -4,9 +4,7 @@ using Random
 using LinearAlgebra
 
 # Takes a PLUQ object into the original matrix
-recomp(x) = ([x.L ; x.M] * [x.U x.V])[x.p, x.q]
-
-exactrand(n...) = big.(rand(Int64, n...) .// rand(Int64, n...))
+recomp(x :: PLUQ) = ([x.L ; x.M] * [x.U x.V])[x.p, x.q]
 
 # Check that the decomposition
 # can be multiplied into the right matrix
