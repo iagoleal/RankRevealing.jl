@@ -41,10 +41,17 @@ end
   @test correctness(A)
 end
 
-@testset "Random matrices: ($m by $n)" for m in 0:9, n in 0:9
+@testset "Random matrices: ($m by $n)" for m in 0:6, n in 0:6
   @testset "Floating point components" begin
     @test correctness(rand(m,n))   # Uniform components
     @test correctness(randn(m,n))  # Gaussian matrix
+    @testset "Does it reveal the rank?" begin
+      for r in 0:min(m, n)
+        A = randn(m, r) * randn(r, n)  # Generate a random rank r matrix
+        F = pluq(A)
+        @test F.rank == r
+      end
+    end
   end
 
   @testset "Exact Rational components" begin
@@ -60,9 +67,7 @@ end
     B = exactrand(m, n)
     @test correctness(A + im*B)
     # Unit complex matrices
-    A = rand(Complex{Float64}, m, n)
-    C = A ./ norm.(A)
-    @test correctness(C)
+    @test correctness(cisrand(m, n))
   end
 end
 
