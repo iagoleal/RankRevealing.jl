@@ -385,10 +385,10 @@ end
 function right_rr(A::AbstractMatrix{T}) where T
   p, L, U, V, M, q = pluq2(A)
   d = cols(V)
-  Z = zeros(T, cols(V), cols(U))
+  Z = zeros(Int64, cols(V), cols(U))
   X = ([L ; M])[p, :]
   H = ([I(d) Z; V U])[:, q]
-  return X, H
+  return X, Array(H)
 end
 
 # Left rank revealing
@@ -396,11 +396,11 @@ function left_rr(A::AbstractMatrix{T}) where T
   p, L, U, V, M, q = pluq2(A)
   r = rows(L)
   m = rows(A)
-  Z = zeros(T, r, m - r)
+  Z = zeros(Int64, r, m - r)
   d = m - r
   X = ([L Z; M I(d)])[p, :]
   H = ([V U])[:, q]
-  return X, H
+  return Array(X), H
 end
 
 
