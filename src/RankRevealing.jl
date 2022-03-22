@@ -436,9 +436,9 @@ function grr(A, B)
   Z3 = zeros(Int64, rows(H5), cols(H4))
   H = [H4 A41 ; Z3 H5] * H2 * H1
   # Ranks
-  rA = cols(X)
-  rB = cols(Y)
-  r_cap = rA + rB - cols(H)
+  rA = cols(X)                 # Rank of A
+  rB = cols(Y)                 # Rank of B
+  r_cap = rA + rB - rows(H)    # Dimension of R(A) ∩ R(B)
   return GeneralizedRankRevealing(X, Y, H, rA - r_cap, rB - r_cap, r_cap)
 end
 
