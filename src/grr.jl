@@ -2,26 +2,61 @@
 # Generalized Rank Revealing decomposition
 ###########################################
 
+"""
+    GeneralizedRankRevealing <: Factorization
+
+Matrix factorization type for the Generalized Rank Reveling decomposition
+of two matrices `A` and `B` with the same number of columns.
+This is obtained via the function `grr(A,B)`.
+
+By calling `d_+` the dimension of the sum of `A` and `B` row spaces,
+this factorization has the decomposes the matrices as
+
+                    | I 0 0 |
+    | A | = | X 0 | | 0 0 I |
+    | B |   | 0 Y | | 0 I 0 | H
+                    | 0 0 I |
+
+| Component | Description                              |
+|:----------|:-----------------------------------------|
+| `F.X`     | `m_A x r_A` full column rank matrix      |
+| `F.Y`     | `m_B x r_B` full column rank matrix      |
+| `F.H`     | `d_+ x n` full row rank matrix           |
+
+Other useful fields are:
+* `F.r1`: Rank of `A` minus minus the intersection
+* `F.r2`: Rank of `B` minus minus the intersection
+* `F.r3`: Rank of the intersection
+"""
 struct GeneralizedRankRevealing{T, S <: AbstractMatrix{T}} <: Factorization{T}
   X        :: S
   Y        :: S
   H        :: S
-  r1       :: Int64
-  r2       :: Int64
-  r3       :: Int64
 end
 
-function GeneralizedRankRevealing(X :: S, Y :: S, H :: S, r1, r2, r3) where {T, S <: AbstractMatrix{T}}
-  GeneralizedRankRevealing{T, S}(X, Y, H, r1, r2, r3)
+function GeneralizedRankRevealing(X :: S, Y :: S, H :: S) where {T, S <: AbstractMatrix{T}}
+  GeneralizedRankRevealing{T, S}(X, Y, H)
+end
+
+function Base.getproperty(D::GeneralizedRankRevealing{T}, key::Symbol) where T
+  # cols(X) == rank of A
+  # cols(Y) == rank of B
+  # rows(H) == dim of intersection
+  if     key == :r1
+    return cols(D.X) - D.r3
+  elseif key == :r2
+    return cols(D.Y) - D.r3
+  elseif key == :r3
+    return cols(D.X) + cols(D.Y) - rows(D.H)    # Dimension of R(A) ∩ R(B)
+  else
+    getfield(D, key)
+  end
 end
 
 # Destructure as p, L, U, V, M, q
 Base.iterate(S::GeneralizedRankRevealing)             = (S.X, Val(:Y))
 Base.iterate(S::GeneralizedRankRevealing, ::Val{:Y})  = (S.Y, Val(:H))
-Base.iterate(S::GeneralizedRankRevealing, ::Val{:H})  = (S.H, Val(:r1))
-Base.iterate(S::GeneralizedRankRevealing, ::Val{:r1}) = (S.r1, Val(:r2))
-Base.iterate(S::GeneralizedRankRevealing, ::Val{:r2}) = (S.r2, Val(:r3))
-Base.iterate(S::GeneralizedRankRevealing, ::Val{:r3}) = (S.r3, Val(:done))
+Base.iterate(S::GeneralizedRankRevealing, ::Val{:H})  = (S.H, Val(:done))
 Base.iterate(S::GeneralizedRankRevealing, ::Val{:done}) = nothing
 
 # For the GLU algorithm, we want to swaps U and V on PLUQ.
@@ -113,11 +148,7 @@ function grr(A, B)
   Y = Y2 / H5
   Z3 = zeros(Int64, rows(H5), cols(H4))
   H = [H4 A41 ; Z3 H5] * H2 * H1
-  # Ranks
-  rA = cols(X)                 # Rank of A
-  rB = cols(Y)                 # Rank of B
-  r_cap = rA + rB - rows(H)    # Dimension of R(A) ∩ R(B)
-  return GeneralizedRankRevealing(X, Y, H, rA - r_cap, rB - r_cap, r_cap)
+  return GeneralizedRankRevealing(X, Y, H)
 end
 
 ###################################

@@ -69,7 +69,9 @@ end
   ma = 5 ; mb = 7; n = 3
   A = exactrand(ma, n)
   B = exactrand(mb, n)
-  X, Y, H, r1, r2, r3 = grr(A, B)
+  F = grr(A, B)
+  X, Y, H = F
+  r1, r2, r3 = F.r1, F.r2, F.r3
   @test size(X) == (ma, r1 + r3)
   @test size(Y) == (mb, r2 + r3)
   @test size(H) == (r1+r2+r3, n)
