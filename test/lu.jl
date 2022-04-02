@@ -9,7 +9,8 @@ recomp(x :: PLUQ) = ([x.L ; x.M] * [x.U x.V])[x.p, x.q]
 # Check that the decomposition
 # can be multiplied into the right matrix
 function correctness(A::AbstractArray{T}) where {K <: AbstractFloat, S <: Complex{K}, T <: Union{S, K}}
-  return isapprox(recomp(pluq(A)), A, atol = 1e-10)
+  F = pluq(A)
+  return isapprox(recomp(F), A, atol = 1e-7) && rank(F) == rank(A, atol = 1e-7)
 end
 correctness(A) = recomp(pluq(A)) == A
 

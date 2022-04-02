@@ -263,3 +263,5 @@ function pluq(A::AbstractMatrix)
 end
 
 pluq(A::PLUQ) = A
+
+LinearAlgebra.rank(A :: PLUQ) = A.rank
