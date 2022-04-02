@@ -45,40 +45,8 @@ function msplit(A, mh = fld(rows(A),2), nh = fld(cols(A), 2))
          view(A, (mh+1):m, (nh+1):n)
 end
 
-########################
-# Permutations
-########################
-
-function permcompose(p, q)
-  n = length(p)
-  if n != length(q)
-    error("Tried to compose permutations over different dimensions.")
-  end
-  return [p[q[k]] for k in 1:n]
-end
-
-function permtranspose(p)
-  pt = similar(p)
-  for (i, v) in enumerate(p)
-    pt[v] = i
-  end
-  return pt
-end
-
-# Transposition permutation for indices i and j
-function transposition(n, i, j)
-  perm = collect(1:n)
-  perm[i], perm[j] = perm[j], perm[i]
-  return perm
-end
-
-function perm2matrix(T, p)
-  A = zeros(T, length(p), length(p))
-  for (i, v) in enumerate(p)
-    A[i, v] = 1
-  end
-  return A
-end
+# Permutations helpers
+include("permutations.jl")
 
 # PLUQ decomposition
 include("pluq.jl")

@@ -68,7 +68,7 @@ function pluq2(A)
   n = cols(A)
   r = F.rank
   j = vcat(((n-r+1) : n),  (1:n-r)) # Permutation vector for matrix [0 I; I 0]
-  newq = permcompose(j, F.q)
+  newq = Perm(j) * Perm(F.q)
   return PLUQ(F.p, newq, F.rank, F.factors)
 end
 

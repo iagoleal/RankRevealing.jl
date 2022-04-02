@@ -14,7 +14,7 @@ end
 
 # Check that the decomposition can be multiplied into the right matrix
 function correctness(A::W, B::W) where {K <: AbstractFloat, S <: Complex{K}, T <: Union{S, K}, W<:AbstractArray{T}}
-  eps = 1e-10
+  eps = 1e-7
   F = grr(A, B)
   Ar, Br = recomp(F)
   rA = rank(A)

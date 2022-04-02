@@ -41,8 +41,9 @@ struct PLUQ{T, S <: AbstractMatrix{T}} <: Factorization{T}
   end
 end
 
-function PLUQ(p, q, r, A::AbstractMatrix{T}) where {T}
-  PLUQ{T,typeof(A)}(p, q, r, A)
+VorP = Union{Vector{Int64}, Perm}
+function PLUQ(p :: VorP, q :: VorP, r, A::AbstractMatrix{T}) where {T}
+  PLUQ{T,typeof(A)}(Perm(p).vec, Perm(q).vec, r, A)
 end
 
 function Base.getproperty(D::PLUQ{T}, key::Symbol) where T
@@ -63,9 +64,9 @@ function Base.getproperty(D::PLUQ{T}, key::Symbol) where T
     r = getfield(D, :rank)
     return getfield(D, :factors)[(r+1):end, 1:r]
   elseif key == :P
-    return perm2matrix(T, getfield(D, :p))
+    return Matrix(T, Perm(getfield(D, :p)))
   elseif key == :Q
-    return perm2matrix(T, getfield(D, :q))
+    return Matrix(T, Perm(getfield(D, :q)))
   else
     getfield(D, key)
   end
@@ -87,18 +88,6 @@ function mm!(C, A, B)
   C .= C - A*B
   return C
   # LinearAlgebra.mul!(C, A, B, -1, 1)
-end
-
-# Permute the columns of A inplace
-# TODO: Rewrite this without copying
-function permC!(A, p::AbstractVector)
-  B = A[:, permtranspose(p)]
-  A .= B
-end
-
-# Permute the rows of A inplace
-function permR!(A, p::AbstractVector)
-  A .= A[permtranspose(p), :]
 end
 
 # Auxiliary function to `pluq!`.
@@ -132,12 +121,12 @@ function pluq!(A)
   m, n = size(A)
   # Degenerate zero
   if m == 0 && n == 0
-    return [], [], 0, A
+    return Perm([]), Perm([]), 0, A
   end
   if m == 1
-    P = [1]
+    P = Perm([1])
     if checkzero(A)
-      Q = collect(1:n)    # n x n identity matrix
+      Q = idperm(n) # n x n identity matrix
       r = 0
     else
       i = findfirst(!(checkzero), A)[2]        # column index of the first non-zero element of A
@@ -148,9 +137,9 @@ function pluq!(A)
     return P, Q, r, A
   end
   if n == 1
-    Q = [1]
+    Q = Perm([1])
     if checkzero(A)
-      P = collect(1:m)
+      P = idperm(m)
       r = 0
     else
       i = findfirst(!(checkzero), A)[1] # row index of the first non-zero element of A
@@ -169,8 +158,8 @@ function pluq!(A)
   A1, A2, A3, A4 = msplit(A)
   P1, Q1, r1, A1 = pluq!(A1) # Decompose upper-left quadrant
   L1, U1, V1, M1 = decomp(A1, r1)
-  B1, B2 = vsplit(permR!(A2, P1), r1)
-  C1, C2 = hsplit(permC!(A3, Q1), r1)
+  B1, B2 = vsplit(permR!(A2, P1'), r1)
+  C1, C2 = hsplit(permC!(A3, Q1'), r1)
   D = ldiv!(L1, B1)
   E = rdiv!(C1, U1)
   F = mm!(B2, M1, D)
@@ -180,15 +169,15 @@ function pluq!(A)
   L2, U2, V2, M2 = decomp(F, r2)
   P3, Q3, r3, G = pluq!(G) # Decompose
   L3, U3, V3, M3 = decomp(G, r3)
-  permR!(H, P3)
-  permC!(H, Q2)
+  permR!(H, P3')
+  permC!(H, Q2')
   # Split based on the previous recursions
   H1, H2, H3, H4 = msplit(H, r3, r2)
-  E1,  E2  = vsplit(permR!(E, P3),  r3)
-  M11, M12 = vsplit(permR!(M1, P2), r2)
+  E1,  E2  = vsplit(permR!(E,  P3'), r3)
+  M11, M12 = vsplit(permR!(M1, P2'), r2)
   # Erro do artigo: permC e não permR
-  D1,  D2  = hsplit(permC!(D, Q2),  r2)
-  V11, V12 = hsplit(permC!(V1, Q3), r3)
+  D1,  D2  = hsplit(permC!(D,  Q2'), r2)
+  V11, V12 = hsplit(permC!(V1, Q3'), r3)
   I = rdiv!(H1, U2)
   J = ldiv!(L3, I)
   K = rdiv!(H3, U2)
@@ -197,15 +186,15 @@ function pluq!(A)
   R = (mm!(H4, K, V2); mm!(H4, M3, O))
   P4, Q4, r4, R = pluq!(R) # Decompose lower-left corner
   L4, U4, V4, M4 = decomp(R, r4)
-  permR!(E2, P4)
-  permR!(M3, P4)
-  permR!(K,  P4)
+  permR!(E2, P4')
+  permR!(M3, P4')
+  permR!(K,  P4')
   E21, E22 = vsplit(E2, r4)
   M31, M32 = vsplit(M3, r4)
   K1,  K2  = vsplit(K,  r4)
-  permC!(D2, Q4)
-  permC!(V2, Q4)
-  permC!(O,  Q4)
+  permC!(D2, Q4')
+  permC!(V2, Q4')
+  permC!(O,  Q4')
   D21, D22 = hsplit(D2, r4)
   V21, V22 = hsplit(V2, r4)
   O1,  O2  = hsplit(O,  r4)
@@ -214,24 +203,20 @@ function pluq!(A)
   S = vcat(range(1,                     length=(r1 + r2)),
            range(r1 + r2 + r3 + r4 + 1, length=(k-r1-r2)),
            range(r1 + r2 + 1,           length=(r3+r4)),
-           range(r3 + r4 + k + 1,       length=(m-k-r3-r4)))
+           range(r3 + r4 + k + 1,       length=(m-k-r3-r4))) |> Perm
   kT = cols(A1)
   T = vcat(range(1,          length=r1),
            range(kT+1,       length=r2),
            range(r1+1,       length=r3),
            range(kT+r2+1,    length=r4),
            range(r1+r3+1,    length=(kT-r1-r3)),
-           range(kT+r2+r4+1, length=(n-kT-r2-r4)))
-  P_ = vcat(permcompose(P1, vcat(1:r1, map(x -> x + r1, P2))),
-            map(x -> x + length(P1),
-                permcompose(P3, vcat(1:r3, map(x -> x + r3, P4)))))
-  Q_ = vcat(permcompose(vcat(1:r1, map(x -> x + r1, Q3)), Q1),
-            map(x -> x + length(Q1),
-                permcompose(vcat(1:r2, map(x -> x + r2, Q4)), Q2)))
-  P = permcompose(P_, S)
-  Q = permcompose(T, Q_)
-  permR!(A, S)
-  permC!(A, T)
+           range(kT+r2+r4+1, length=(n-kT-r2-r4))) |> Perm
+  P_ = (P1 * (idperm(r1) ⊕ P2)) ⊕ (P3 * (idperm(r3) ⊕ P4))
+  Q_ = ((idperm(r1) ⊕ Q3) * Q1) ⊕ ((idperm(r2) ⊕ Q4) * Q2)
+  P = P_ * S
+  Q = T * Q_
+  permR!(A, S')
+  permC!(A, T')
   return P, Q, r1 + r2 + r3 + r4, A
 end
 
