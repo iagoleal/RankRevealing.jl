@@ -7,6 +7,10 @@ over any numerical field.
 Our focus is on matrix decompositions that are _rank-sensitive_.
 That is, faster for low-rank matrices.
 
+| **Documentation** | **Build Status** |
+|:-----------------:|:----------------:|
+| [![Stable Docs][docs-stable-img]][docs-stable-url] [![Latest Docs][docs-dev-img]][docs-dev-url] | [![Build Status][build-img]][build-url]  [![Code Coverage][codecov-img]][codecov-url] |
+
 ## Installation
 
 This package is not registered on Julia's general registry yet.
@@ -80,3 +84,16 @@ In: _Proceedings of the 38th International Symposium on Symbolic and Algebraic C
 - <a id="2">[2]</a> Iago Leal de Freitas, João Paixão, Lucas Rufino, and Pawelł Sobocínski.
 "Rank sensitive complexity to find the intersection between two subspaces".
 2022 (upcoming)
+
+
+[docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
+[docs-stable-url]: https://iagoleal.github.io/RankRevealing.jl/
+
+[docs-dev-img]: https://img.shields.io/badge/docs-dev-blue.svg
+[docs-dev-url]: https://iagoleal.github.io/RankRevealing.jl/latest/
+
+[build-img]: https://github.com/iagoleal/RankRevealing.jl/actions/workflows/ci.yml/badge.svg?branch=master
+[build-url]: https://github.com/iagoleal/RankRevealing.jl/actions/workflows/ci.yml
+
+[codecov-img]: https://codecov.io/github/iagoleal/RankRevealing.jl/coverage.svg?branch=master
+[codecov-url]: https://codecov.io/github/iagoleal/RankRevealing.jl?branch=master

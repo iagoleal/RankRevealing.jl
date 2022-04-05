@@ -12,9 +12,10 @@ makedocs(
   modules  = [RankRevealing]
 )
 
-# Documenter can also automatically deploy documentation to gh-pages.
-# See "Hosting Documentation" and deploydocs() in the Documenter manual
-# for more information.
-#=deploydocs(
-    repo = "<repository url>"
-)=#
+# Deplou site to Github Pages
+if !("local" in ARGS)
+  deploydocs(
+    repo = "github.com/iagoleal/RankRevealing.jl.git",
+    devurl = "latest",
+  )
+end
