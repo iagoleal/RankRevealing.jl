@@ -32,6 +32,9 @@ struct GeneralizedRankRevealing{T, S <: AbstractMatrix{T}} <: Factorization{T}
   X        :: S
   Y        :: S
   H        :: S
+  function GeneralizedRankRevealing{T, S}(X :: S, Y :: S, H :: S) where {T, S <: AbstractMatrix{T}}
+    return new(X, Y, H)
+  end
 end
 
 function GeneralizedRankRevealing(X :: S, Y :: S, H :: S) where {T, S <: AbstractMatrix{T}}
