@@ -5,9 +5,11 @@ using RankRevealing
 DocMeta.setdocmeta!(RankRevealing, :DocTestSetup, :(using RankRevealing); recursive=true)
 
 makedocs(
-    sitename = "RankRevealing.jl",
-    format = Documenter.HTML(),
-    modules = [RankRevealing]
+  sitename = "RankRevealing.jl",
+  format   = Documenter.HTML(
+    assets   = ["assets/favicon.ico"],
+  ),
+  modules  = [RankRevealing]
 )
 
 # Documenter can also automatically deploy documentation to gh-pages.
