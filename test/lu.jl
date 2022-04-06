@@ -20,15 +20,15 @@ correctness(A) = recomp(pluq(A)) == A
   @test correctness(zeros(0,1))
   @test correctness(zeros(1,0))
   # Non-degenerate zero matrix
-  @test correctness(zeros(1,1))   # Scalar zero
-  @test correctness(zeros(1,2))   # Column zero vector
-  @test correctness(zeros(2, 1))  # Row zero vector
+  @test correctness(zeros(1,1))     # Scalar zero
+  @test correctness(zeros(1,2))     # Column zero vector
+  @test correctness(zeros(2, 1))    # Row zero vector
   # Non-zero
-  @test correctness([3;;])        # Scalar
-  @test correctness([1;2;;])      # Column vector
-  @test correctness([0;2;;])      # column with pivoting
-  @test correctness([1 2;])       # Row vector
-  @test correctness([0 2;])       # row with pivoting
+  @test correctness(hcat(3))        # Scalar [3;;]
+  @test correctness(hcat([1,2]))    # Column vector
+  @test correctness(hcat([0,2]))    # column with pivoting
+  @test correctness([1 2])          # Row vector
+  @test correctness([0 2])          # row with pivoting
 end
 
 @testset "Recursive cases" begin
