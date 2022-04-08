@@ -42,33 +42,36 @@ end
   @test correctness(A)
 end
 
-@testset "Random matrices: ($m by $n)" for m in 0:6, n in 0:6
+@testset "Random matrices" begin
   @testset "Floating point components" begin
-    @test correctness(rand(m,n))   # Uniform components
-    @test correctness(randn(m,n))  # Gaussian matrix
-    @testset "Does it reveal the rank?" begin
-      for r in 0:min(m, n)
-        A = randn(m, r) * randn(r, n)  # Generate a random rank r matrix
-        F = pluq(A)
-        @test F.rank == r
+    for m in 0:6, n in 0:6
+      @test correctness(rand(m,n))   # Uniform components
+      @test correctness(randn(m,n))  # Gaussian matrix
+      @testset "Does it reveal the rank?" begin
+        for r in 0:min(m, n)
+          A = randn(m, r) * randn(r, n)  # Generate a random rank r matrix
+          F = pluq(A)
+          @test F.rank == r
+        end
+      end
+      @testset "Complex components" begin
+        @test correctness(rand(Complex{Float64}, m, n))
+        # Unit complex matrices
+        @test correctness(cisrand(m, n))
       end
     end
   end
 
   @testset "Exact Rational components" begin
-    # We want to use BigInt and Rational to ensure exact arithmetic
-    A = exactrand(m, n)
-    @test correctness(A)
-  end
-
-  @testset "Complex components" begin
-    @test correctness(rand(Complex{Float64}, m, n))
-    # Complex with exact rational components
-    A = exactrand(m, n)
-    B = exactrand(m, n)
-    @test correctness(A + im*B)
-    # Unit complex matrices
-    @test correctness(cisrand(m, n))
+    for m in 0:6, n in 0:6
+      # We want to use BigInt and Rational to ensure exact arithmetic
+      A = exactrand(m, n)
+      @test correctness(A)
+      @testset "Complex with exact rational components" begin
+        A = exactrand(m, n) + im*exactrand(m, n)
+        @test correctness(A)
+      end
+    end
   end
 end
 

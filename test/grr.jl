@@ -40,27 +40,31 @@ correctness(A, B) = recomp(grr(A, B)) == (A, B)
   end
 end
 
-@testset "Generalized Rank-revealing ($ma by $n), ($mb by $n)" for ma in 0:6, mb in 0:6, n in 0:6
+@testset "Generalized Rank-revealing" begin
   @testset "Exact Rational" begin
-    A = exactrand(ma, n)
-    B = exactrand(mb, n)
-    @test correctness(A, B)
-    @testset "Complex with exact rational components" begin
-      A = exactrand(ma, n) + im*exactrand(ma, n)
-      B = exactrand(mb, n) + im*exactrand(mb, n)
+    for ma in 0:6, mb in 0:6, n in 0:6
+      A = exactrand(ma, n)
+      B = exactrand(mb, n)
       @test correctness(A, B)
+      @testset "Complex with exact rational components" begin
+        A = exactrand(ma, n) + im*exactrand(ma, n)
+        B = exactrand(mb, n) + im*exactrand(mb, n)
+        @test correctness(A, B)
+      end
     end
   end
 
   @testset "Floating point" begin
-    @test correctness(randn(ma, n), randn(mb, n))
-    @test correctness(rand(ma, n), rand(mb, n))
-    @testset "Complex components" begin
-      A = rand(Complex{Float64}, ma, n)
-      B = rand(Complex{Float64}, mb, n)
-      @test correctness(A, B)
-      # Unit complex matrices
-      @test correctness(cisrand(ma, n), cisrand(mb, n))
+    for ma in 0:6, mb in 0:6, n in 0:6
+      @test correctness(randn(ma, n), randn(mb, n))
+      @test correctness(rand(ma, n), rand(mb, n))
+      @testset "Complex with float components" begin
+        A = rand(Complex{Float64}, ma, n)
+        B = rand(Complex{Float64}, mb, n)
+        @test correctness(A, B)
+        # Unit complex matrices
+        @test correctness(cisrand(ma, n), cisrand(mb, n))
+      end
     end
   end
 end
