@@ -51,7 +51,7 @@ end
         for r in 0:min(m, n)
           A = randn(m, r) * randn(r, n)  # Generate a random rank r matrix
           F = pluq(A)
-          @test F.rank == r
+          @test F.rank == rank(A)
         end
       end
       @testset "Complex components" begin
