@@ -81,7 +81,7 @@ the square matrix multiplication algorithm used by Julia.
 In: _Proceedings of the 38th International Symposium on Symbolic and Algebraic Computation_.
 2013, pp. 181–188.
 
-- <a id="2">[2]</a> Iago Leal de Freitas, João Paixão, Lucas Rufino, and Pawelł Sobocínski.
+- <a id="2">[2]</a> Iago Leal de Freitas, João Paixão, Lucas Rufino, and Paweł Sobocínski.
 "Rank sensitive complexity to find the intersection between two subspaces".
 2022 (upcoming)
 
