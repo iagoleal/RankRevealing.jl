@@ -1,6 +1,6 @@
 name = "RankRevealing"
 uuid = "56660b65-79ce-4ef5-9ae7-a20c7f920b12"
-authors = ["Iago Leal <iago.lealf@gmail.com>"]
+authors = ["Iago Leal <iago@iagoleal.com>"]
 version = "0.1.0"
 
 [deps]
