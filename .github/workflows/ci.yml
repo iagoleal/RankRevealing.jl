@@ -29,7 +29,7 @@ jobs:
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: actions/cache@v2.1.7
+      - uses: actions/cache@v4
         with:
           path: deps   # A list of files, directories, and wildcard patterns to cache and restore
           key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('**/Project.toml') }}
